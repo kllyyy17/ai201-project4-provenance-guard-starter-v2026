@@ -42,63 +42,57 @@ Two things worth knowing before you pick numbers:
   a **miss**.
 
 ---
-## 1.
+## 1. Human writing is rarely accused
 
-<!-- Your criterion. It must name a number. -->
+Of 10 human-written pieces, at most 1 gets `guess: "ai"`.
 
-
-
-**Why this target:**
-
-
+**Why this target:** On a writing site a wrong accusation costs the writer far
+more than a missed detection costs the site, so 1 in 10 is the most I will
+accept.
 
 ---
 
-## 2.
+## 2. Clearly-AI and clearly-human text score apart
 
-<!-- Your criterion. -->
+The mean `combined_score` of 5 AI-generated pieces is at least 0.25 higher than
+the mean of 5 human-written pieces.
 
-
-
-**Why this target:**
-
-
-
----
-
-## 3.
-
-<!-- Your criterion. -->
-
-
-
-**Why this target:**
-
-
+**Why this target:** If the two groups score close together, any threshold is
+arbitrary. 0.25 is a quarter of the scale, which is enough for the labels to
+mean something without demanding more than two weak signals can give.
 
 ---
 
-## 4.
+## 3. All three labels are reachable
 
-<!-- Your criterion. -->
+Submitting 15 pieces through `/submit` (5 AI-generated, 5 human-written, and 5
+borderline) returns each of `human`, `unsure` and `ai` for at least 3 of the 15 pieces, in every trial.
 
-
-
-**Why this target:**
-
-
+**Why this target:** A label that can never fire is a lie in the interface, and
+`unsure` is the label my design relies on to protect plain-writing humans.
+`ai` is the hardest to reach, because my design requires both signals to agree.
 
 ---
 
-## 5.
+## 4. An appeal is recorded without overwriting the decision
 
-<!-- Your criterion. -->
+After `POST /appeal` on a valid `content_id`, the audit log holds both the
+original `decided` entry and a new `under_review` entry for that id, and this
+is true for 10 of 10 appeals.
 
+**Why this target:** The appeal is the only recourse for a wrongly labelled
+writer, so there is no acceptable failure rate. The log is append-only so the
+original decision stays visible beside the appeal.
 
+---
 
-**Why this target:**
+## 5. Empty text is refused
 
+A `POST /submit` with `text` set to an empty string or only spaces returns 400
+`invalid_input` in 3 of 3 tries, never a 200 or a 500.
 
+**Why this target:** An empty submission has nothing to judge, and scoring it
+would produce a made-up label that a writer could be held to.
 
 ---
 
