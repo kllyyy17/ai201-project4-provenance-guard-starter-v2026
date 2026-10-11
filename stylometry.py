@@ -33,6 +33,8 @@ anything together:
 import re
 import statistics
 
+import config
+
 
 def sentences(text: str) -> list[str]:
     """Split into sentences. Rough and good enough — given to you."""
@@ -64,8 +66,12 @@ def sentence_length_spread(text: str) -> float:
     `stdev` raises on fewer than two values. Decide what that should return
     before the attack set decides for you.
     """
-    # TODO: replace this
-    return 0.0
+    lengths = [len(words(sent)) for sent in sentences(text)]
+    lengths = [n for n in lengths if n > 0]
+    if len(lengths) < 2:
+        return 0.0  # one sentence: no spread to measure; style_signal treats this as "no evidence"
+    mean = statistics.mean(lengths)
+    return statistics.stdev(lengths) / mean if mean else 0.0
 
 
 def type_token_ratio(text: str) -> float:
@@ -80,8 +86,9 @@ def type_token_ratio(text: str) -> float:
     directly comparable on it, and if your test inputs vary a lot in length,
     that alone can look like a signal.
     """
-    # TODO: replace this
-    return 0.0
+    # Only the first TTR_WINDOW words, so a long text isn't penalised for length.
+    tokens = words(text)[: config.TTR_WINDOW]
+    return len(set(tokens)) / len(tokens) if tokens else 0.0
 
 
 def punctuation_density(text: str) -> float:
@@ -94,8 +101,11 @@ def punctuation_density(text: str) -> float:
         more interesting than full stops, because they vary more between
         writers.
     """
-    # TODO: replace this
-    return 0.0
+    n_words = len(words(text))
+    if not n_words:
+        return 0.0
+    marks = re.findall(r"[,;:()—–!?\"]|--", text)
+    return len(marks) / n_words
 
 
 # ── Combining them ───────────────────────────────────────────────────────────
@@ -122,8 +132,19 @@ def style_signal(text: str) -> float:
     you trust it. Plain and ordinary, not formal: formal prose reads as *human*
     to signal one, and it is plain writing that gets accused.
     """
-    # TODO: replace this
-    return 0.5
+    if len(sentences(text)) < 2 or len(words(text)) < 2:
+        return 0.5  # too little text to read a shape from: say "don't know"
+
+    def ramp(value, ai_end, human_end):
+        """1.0 at the AI end, 0.0 at the human end, linear between, clamped."""
+        return max(0.0, min(1.0, (value - human_end) / (ai_end - human_end)))
+
+    spread = ramp(sentence_length_spread(text), *config.SPREAD_AI_HUMAN)   # low spread -> AI
+    ttr = ramp(type_token_ratio(text), *config.TTR_AI_HUMAN)               # low variety -> AI
+    punct = ramp(punctuation_density(text), *config.PUNCT_AI_HUMAN)        # sparse punctuation -> AI
+
+    w_spread, w_ttr, w_punct = config.STYLE_WEIGHTS
+    return w_spread * spread + w_ttr * ttr + w_punct * punct
 
 
 if __name__ == "__main__":
@@ -139,4 +160,3 @@ if __name__ == "__main__":
     print(f"type_token_ratio         {type_token_ratio(text)}")
     print(f"punctuation_density      {punctuation_density(text)}")
     print(f"style_signal             {style_signal(text)}   (higher = more likely AI)")
-    print("\nAll zeros? These are stubs — Milestone 4 is where you build them.")

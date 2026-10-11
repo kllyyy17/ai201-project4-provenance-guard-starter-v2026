@@ -218,24 +218,32 @@ def submit():
     except detector.DetectorUnavailable as exc:
         return jsonify({"error": "detector_unavailable", "message": str(exc)}), 503
 
+    import scoring
+    import stylometry
+    style_score = stylometry.style_signal(text)
+    combined_score = scoring.combine_signals(model_score, style_score)
+
     content_id = str(uuid.uuid4())
-    guess = "ai" if model_score >= 0.5 else "human"
+    guess = "ai" if combined_score >= 0.5 else "human"  # placeholder until Milestone 5
 
     audit.log_decision(
         content_id=content_id,
         creator_id=creator_id,
         guess=guess,
         model_score=model_score,
+        style_score=style_score,
+        combined_score=combined_score,
         status="decided",
     )
 
     return jsonify({
         "content_id": content_id,
         "guess": guess,
-        "confidence": 0.0,        # placeholder until Milestone 4
+        "confidence": 0.0,        # placeholder until Milestone 5
         "label": "placeholder",   # placeholder until Milestone 5
         "model_score": model_score,
-        "style_score": None,      # second signal comes in Milestone 4
+        "style_score": style_score,
+        "combined_score": combined_score,
     })
 
 

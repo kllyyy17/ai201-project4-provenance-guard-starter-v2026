@@ -53,37 +53,61 @@
 
 ### Signal one — the model signal
 
-**What it measures:**
+**What it measures:** How predictable the text is to a language model. A local GPT-2 reads the first 400 tokens (roughly 300 words) and computes perplexity. A logistic curve on log-perplexity (midpoint 45, steepness 1.6, both left at the starter defaults) maps it to `model_score`, 0–1, higher meaning more AI-like (`detector.py::model_signal`).
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** A language model produces the likely next word, so its output tends to be highly predictable to another language model. People reach for surprising words and odd turns more often.
 
-**What it can't see:**
+**What it can't see:** Predictability is not authorship. Plain writing in common words and short sentences scores machine-like however it was produced: second-language writers, younger writers, anyone writing simply. My plain-human test ("I went to the store yesterday...") scored 0.88. It can also be fooled the other way: my lightly-edited AI input scored only 0.33. Adding a single typo ("Artifcial") to the same text moved it from 0.50 to 0.33, because a misspelt word is surprising to the model. The style signal stayed at 0.71 either way. It only reads the first 400 tokens, so the rest of a long piece is never seen, and text under three tokens can't be scored at all (the service returns a 400).
 
 ### Signal two — the style signal
 
-**What it measures:**
+**What it measures:** The shape of the text, with no understanding of it (`stylometry.py::style_signal`). Three measures, each scaled to 0–1 with a linear ramp (endpoints in `config.py`), then averaged:
 
-**Why that might differ between human and AI writing:**
+| Measure | What it is | Fully AI-like at | Fully human-like at | Weight |
+|---|---|---|---|---|
+| Sentence-length spread | std / mean of sentence lengths in words | 0.25 | 0.80 | 0.50 |
+| Type-token ratio | unique words / words, first 100 words only | 0.55 | 0.85 | 0.25 |
+| Punctuation density | `, ; : ( ) — – ! ? "` per word | 0.05 | 0.25 | 0.25 |
 
-**What it can't see:**
+Higher `style_score` means more AI-like, the same direction as signal one. Fewer than two sentences returns 0.5 ("no evidence"). TTR is cut to the first 100 words because it falls as text gets longer.
+
+**Why that might differ between human and AI writing:** Generated prose tends toward even, mid-length sentences and a narrower vocabulary. Human writing is lumpier, with a three-word sentence beside a forty-word one.
+
+**What it can't see:** Meaning. Anything that changes shape without changing substance moves it: injected typos, chopped-up sentences, a pasted quotation. In the other direction, a human who writes evenly looks AI. It is also weak on very short text. The landlord piece is two sentences, so its spread is noisy, and it scored 0.73. On my four calibration inputs it separated plain human (0.67) from clearly AI (0.76) by only 0.09.
 
 ### The combining rule
 
-<!-- Write the rule in words, then give the numbers. What happens when the two
-     signals disagree? -->
-
-**The rule:**
+**The rule:** Take the average of the two scores. But if the two signals differ by more than 0.35, they disagree, and I don't trust the average as a verdict. The score is then forced to stay inside the unsure band. Two methods splitting is uncertainty. This follows my design decision (DESIGN.md): neither signal alone should be enough to produce an AI label, and a split goes to "unsure".
 
 **The numbers:**
 
-**Where it lives:** `scoring.py::combine_signals`
+| Setting | Value | Where |
+|---|---|---|
+| Weight on model signal | 0.5 | `config.WEIGHT_MODEL_SIGNAL` |
+| Weight on style signal | 0.5 | `config.WEIGHT_STYLE_SIGNAL` |
+| Disagreement gap | 0.35 | `config.DISAGREEMENT_GAP` |
+| Disagreement range | `HUMAN_THRESHOLD + 0.01` to `AI_THRESHOLD - 0.01` (currently 0.36–0.64) | `scoring.py::combine_signals` |
 
-<!-- ⚠️ The grader checks your code against that line. If your rule lives
-     somewhere else, say where. -->
+Equal weights, because I couldn't justify either signal as more trustworthy: they fail on different inputs (see DESIGN.md).
+
+**Where it lives:** `scoring.py::combine_signals`
 
 **A case where my two signals split, and what my rule does with it:**
 
+The landlord piece ("ok so my landlord finally fixed the heater at 2am...") got `model_score` 0.081 (human) and `style_score` 0.734 (AI), a gap of 0.65. The model signal likes its odd, specific content. The style signal sees only two sentences and little punctuation, and calls it even and sparse. The average is 0.408, which is inside the unsure band, so the clamp changed nothing here. The result is unsure (0.41), not accused. The clamp matters when disagreeing signals average outside the band, for example model 0.90 and style 0.50 average 0.70 and would be capped at 0.64.
 
+The same signals split on lightly-edited AI: model 0.333, style 0.708, combined 0.520. The model signal was fooled by the typo; style still saw even sentences. Averaging with the disagreement rule keeps it out of "human".
+
+**Calibration run** (`python calibrate.py`):
+
+| Input | model | style | combined |
+|---|---|---|---|
+| clearly AI | 0.890 | 0.764 | 0.827 |
+| clearly human | 0.134 | 0.309 | 0.221 |
+| plain human | 0.860 | 0.672 | 0.766 |
+| lightly-edited AI | 0.333 | 0.708 | 0.520 |
+
+Clearly-AI and clearly-human land 0.61 apart. **Known limit:** plain human writing scores 0.77 because both signals agree it looks AI. The combining rule can't catch that, since it only handles disagreement. Plain human text scores above the current AI threshold of 0.65, so this has to be handled through the thresholds and the label wording, not the combining rule. Raising `AI_THRESHOLD` far enough to clear it (about 0.80 or higher) also puts clearly-AI text (0.83) on the edge of the unsure band. That is the trade, and it gets decided when I set the thresholds.
 
 ---
 

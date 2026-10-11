@@ -57,6 +57,18 @@ DETECTOR_MAX_TOKENS = 400
 WEIGHT_MODEL_SIGNAL = 0.5
 WEIGHT_STYLE_SIGNAL = 0.5
 
+# If the two signals differ by more than this, they disagree, and the combined
+# score is forced into the unsure band instead of trusting either one.
+DISAGREEMENT_GAP = 0.35
+
+# Style signal: each measure is scaled to 0-1 by a linear ramp, written as
+# (value that counts as fully AI-like, value that counts as fully human-like).
+SPREAD_AI_HUMAN = (0.25, 0.80)   # sentence-length std / mean
+TTR_AI_HUMAN = (0.55, 0.85)      # unique words / words, first TTR_WINDOW words
+PUNCT_AI_HUMAN = (0.05, 0.25)    # punctuation marks per word
+TTR_WINDOW = 100
+STYLE_WEIGHTS = (0.5, 0.25, 0.25)  # spread, ttr, punctuation
+
 
 # ─── Thresholds (Milestone 5) ────────────────────────────────────────────────
 # Where one label becomes another. Scores run 0.0 (confidently human) to 1.0
