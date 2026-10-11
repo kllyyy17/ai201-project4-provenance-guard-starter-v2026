@@ -121,14 +121,46 @@
      two off the response, so leaving them out costs you next unit's
      diagnostics. -->
 
+*Milestone 3 state: one signal (model_score) is live. `confidence` and `label` are placeholders and `style_score` is null until Milestone 4. Commands were run in Windows PowerShell, so the JSON body is read from a file (`--data-binary "@file"`) to avoid quoting problems.*
+
+Plain human writing (scores as AI-like, the detector's known blind spot):
+
 ```bash
-$ curl -X POST http://127.0.0.1:5000/submit \
+$ curl.exe -s -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+  --data-binary "@store.json"
+# store.json: {"text": "I went to the store yesterday. The store was busy, so I waited in line for a while. Then I bought some milk and bread and went home.", "creator_id": "u1"}
 ```
 
 ```json
+{
+  "confidence": 0.0,
+  "content_id": "c80e9c6f-6194-485e-8dff-2292fce1fa8b",
+  "guess": "ai",
+  "label": "placeholder",
+  "model_score": 0.8763,
+  "style_score": null
+}
+```
 
+Casual, distinctive human writing:
+
+```bash
+$ curl.exe -s -X POST http://127.0.0.1:5000/submit \
+  -H "Content-Type: application/json" \
+  --data-binary "@landlord.json"
+# landlord.json: {"text": "ok so my landlord finally fixed the heater at 2am, in a thunderstorm, wearing a raincoat indoors. nobody tells you that adulthood is mostly negotiating with a guy named Dmitri about boilers.", "creator_id": "u2"}
+```
+
+```json
+{
+  "confidence": 0.0,
+  "content_id": "6007fe41-8850-4ea6-85f8-104f2e32c233",
+  "guess": "human",
+  "label": "placeholder",
+  "model_score": 0.0812,
+  "style_score": null
+}
 ```
 
 **An appeal**
@@ -146,11 +178,37 @@ $ curl -X POST http://127.0.0.1:5000/appeal \
 **What the log shows afterwards**
 
 ```bash
-$ curl "http://127.0.0.1:5000/log?limit=3"
+$ curl.exe -s "http://127.0.0.1:5000/log?limit=2"
 ```
 
 ```json
-
+{
+  "count": 2,
+  "entries": [
+    {
+      "combined_score": null,
+      "content_id": "c80e9c6f-6194-485e-8dff-2292fce1fa8b",
+      "creator_id": "u1",
+      "guess": "ai",
+      "label": null,
+      "model_score": 0.8763,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-10-11T18:27:16+00:00"
+    },
+    {
+      "combined_score": null,
+      "content_id": "6007fe41-8850-4ea6-85f8-104f2e32c233",
+      "creator_id": "u2",
+      "guess": "human",
+      "label": null,
+      "model_score": 0.0812,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-10-11T18:27:22+00:00"
+    }
+  ]
+}
 ```
 
 ---
