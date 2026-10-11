@@ -36,8 +36,19 @@
 
 ## What This Does
 
-<!-- The path a submission takes, from arriving to the label a reader sees.
-     Six or seven steps — this is the trace you wrote in Milestone 1. -->
+Provenance Guard is a small Flask service that guesses whether a piece of writing was made by a person or an AI tool, and gives the writer a plain-language label they can appeal. It never decides anything on its own: it makes a guess, says how unsure it is, and keeps a record.
+
+The path a submission takes:
+
+1. A client sends `POST /submit` with `text` and `creator_id`. The route (`app.py`) returns HTTP 400 if either is missing or empty.
+2. The text goes to the model signal. If it is too short to score (under three tokens), that is also a 400.
+3. Signal one (`detector.py::model_signal`) runs GPT-2 over the first 400 tokens and turns perplexity into `model_score`, 0–1.
+4. Signal two (`stylometry.py::style_signal`) measures sentence-length spread, vocabulary variety and punctuation density and returns `style_score`, 0–1.
+5. `scoring.py::combine_signals` merges the two into one `combined_score`. If the signals disagree by more than 0.35, the score is held inside the unsure band.
+6. `scoring.py::score_to_label` maps the score to one of three labels (human, unsure, AI) written for a non-technical reader, and the guess (`human` / `unsure` / `ai`) is set from the same ranges.
+7. The route generates a `content_id` (a UUID), and `audit.py` appends the decision (ids, both signal scores, combined score, guess, label, status `decided`, timestamp) to `logs/audit.jsonl`, and the route returns `content_id`, `guess`, `confidence`, `label`, `model_score` and `style_score`.
+
+If a writer disagrees, `POST /appeal` with the `content_id` and their `reasoning` writes a second log entry with status `under_review`. `GET /log` shows the whole history.
 
 
 
@@ -273,17 +284,17 @@ The original decision keeps `"status": "decided"`. The appeal is a second entry 
 
 ## How I Used AI
 
-**Moment 1**
+**Moment 1: the combining rule**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* A way to combine `model_score` and `style_score` into one number, with the requirement that neither signal alone should be enough to produce an AI label (my design decision in DESIGN.md).
+- *What came back:* A weighted average of the two scores, using the placeholder weights in `config.py`.
+- *What I changed:* I kept equal weights (0.5 each) because I couldn't justify trusting either signal more. I added a disagreement rule: if the scores differ by more than 0.35, the result is clamped to stay inside the unsure band (0.36-0.64). That rule is in `scoring.py::combine_signals`. I then tested it on the landlord piece (model 0.081, style 0.734, gap 0.65). The result was 0.41, unsure, instead of an accusation.
 
-**Moment 2**
+**Moment 2: calibration and the labels**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* Help judging whether my two signals separated human from AI text, and wording for the three labels that a writer with no technical background could read.
+- *What came back:* Calibration numbers from `calibrate.py`, and a first set of label text.
+- *What I changed:* The calibration showed my plain-human input scoring 0.77, above the 0.65 AI threshold, because both signals agree it looks AI. I did not accept that the combining rule could fix this. I wrote it up as a known limit in the README. I then reworded the labels. The AI label says "may have been" and tells the writer how to appeal. The unsure label says plainly that the check couldn't tell and that nobody has decided anything. Neither uses "score", "confidence" or "threshold".
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
