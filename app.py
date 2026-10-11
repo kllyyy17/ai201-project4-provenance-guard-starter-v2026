@@ -224,7 +224,10 @@ def submit():
     combined_score = scoring.combine_signals(model_score, style_score)
 
     content_id = str(uuid.uuid4())
-    guess = "ai" if combined_score >= 0.5 else "human"  # placeholder until Milestone 5
+    guess, label = scoring.score_to_label(combined_score)
+    # How far the score sits from the middle of the scale, on the side of the
+    # guess. For "unsure" this is just the larger side and stays near 0.5.
+    confidence = round(max(combined_score, 1 - combined_score), 4)
 
     audit.log_decision(
         content_id=content_id,
@@ -233,14 +236,15 @@ def submit():
         model_score=model_score,
         style_score=style_score,
         combined_score=combined_score,
+        label=label,
         status="decided",
     )
 
     return jsonify({
         "content_id": content_id,
         "guess": guess,
-        "confidence": 0.0,        # placeholder until Milestone 5
-        "label": "placeholder",   # placeholder until Milestone 5
+        "confidence": confidence,
+        "label": label,
         "model_score": model_score,
         "style_score": style_score,
         "combined_score": combined_score,
@@ -267,14 +271,37 @@ def appeal():
     to the person on the other end. It's the only thing standing between a
     wrong accusation and nothing at all.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
+    content_id = payload.get("content_id")
+    reasoning = payload.get("reasoning")
 
-    # TODO: delete this and build the route.
+    if not isinstance(content_id, str) or not content_id.strip():
+        return jsonify({"error": "bad_request", "message": "content_id is required"}), 400
+    if not isinstance(reasoning, str) or not reasoning.strip():
+        return jsonify({"error": "bad_request", "message": "reasoning is required"}), 400
+
+    history = audit.entries_for(content_id)
+    decisions = [e for e in history if "event" not in e]
+    if not decisions:
+        return jsonify({
+            "error": "not_found",
+            "message": f"No submission with content_id {content_id}.",
+        }), 404
+
+    audit.log_appeal(
+        content_id=content_id,
+        creator_id=decisions[0].get("creator_id"),
+        reasoning=reasoning.strip(),
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
+        "content_id": content_id,
+        "status": "under_review",
+        "message": "Thanks. Your appeal has been recorded and this piece is now "
+                   "under review. Nothing further is needed from you.",
+    })
 
 
 # ── Already works ─────────────────────────────────────────────────────────────

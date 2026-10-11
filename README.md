@@ -120,14 +120,16 @@ Clearly-AI and clearly-human land 0.61 apart. **Known limit:** plain human writi
 
 | Label | Score range | The exact text a reader sees |
 |---|---|---|
-| high-confidence human |  |  |
-| unsure |  |  |
-| high-confidence AI |  |  |
+| high-confidence human | 0.00 – 0.35 | "We think this was probably written by a person. Our check is only a guess, but nothing in it stood out to us." |
+| unsure | 0.35 – 0.65 | "We can't tell whether this was written by a person or by an AI tool. Our check looked at it and came out unsure, which happens with plenty of work that people wrote themselves. No one has decided anything about this piece." |
+| high-confidence AI | 0.65 – 1.00 | "Our check thinks this may have been written with an AI tool. It can be wrong, especially on plain or simple writing. If you wrote it yourself, you can appeal and a person will take a look." |
+
+The text lives in `scoring.py` (`LABEL_HUMAN`, `LABEL_UNSURE`, `LABEL_AI`) and is chosen by `scoring.py::score_to_label`. The ranges come from `config.HUMAN_THRESHOLD` and `config.AI_THRESHOLD`.
 
 **Why I worded the "unsure" one this way:**
-<!-- It's the hardest of the three. It has to admit uncertainty without
-     sounding like an accusation, because the person reading it may well have
-     written every word themselves. -->
+The person reading it may have written every word themselves, so it says plainly that the check couldn't tell and that this is common for human work. It ends by saying nobody has decided anything, so it can't be read as a verdict or an accusation. It never uses "score", "confidence" or "threshold".
+
+**Why the AI label is hedged too:** my own calibration showed plain human writing scoring 0.77, above the AI threshold. So even the strongest label says "may have been" and tells the writer how to appeal, because a real writer will sometimes see it.
 
 
 
@@ -135,19 +137,11 @@ Clearly-AI and clearly-human land 0.61 apart. **Known limit:** plain human writi
 
 ## Sample Run
 
-<!-- One submission and one appeal, pasted as text: the request, the response,
-     and the log entries. -->
-
 **A submission**
 
-<!-- The response needs content_id, guess, confidence, label, AND both
-     signal scores - model_score and style_score. Unit 8's tools read those
-     two off the response, so leaving them out costs you next unit's
-     diagnostics. -->
+All three labels were reached with real submissions. Commands were run in Windows PowerShell, so the JSON body is read from a file (`--data-binary "@file"`) to avoid quoting problems.
 
-*Milestone 3 state: one signal (model_score) is live. `confidence` and `label` are placeholders and `style_score` is null until Milestone 4. Commands were run in Windows PowerShell, so the JSON body is read from a file (`--data-binary "@file"`) to avoid quoting problems.*
-
-Plain human writing (scores as AI-like, the detector's known blind spot):
+Plain human writing, which gets the AI label. This is the detector's known blind spot, and it is the case the appeal exists for:
 
 ```bash
 $ curl.exe -s -X POST http://127.0.0.1:5000/submit \
@@ -158,78 +152,118 @@ $ curl.exe -s -X POST http://127.0.0.1:5000/submit \
 
 ```json
 {
-  "confidence": 0.0,
-  "content_id": "c80e9c6f-6194-485e-8dff-2292fce1fa8b",
+  "combined_score": 0.8047871527611741,
+  "confidence": 0.8048,
+  "content_id": "64d0d52a-092d-4c85-bdda-a50ccb6c85ef",
   "guess": "ai",
-  "label": "placeholder",
+  "label": "Our check thinks this may have been written with an AI tool. It can be wrong, especially on plain or simple writing. If you wrote it yourself, you can appeal and a person will take a look.",
   "model_score": 0.8763,
-  "style_score": null
+  "style_score": 0.7332743055223481
 }
 ```
 
-Casual, distinctive human writing:
+The other two labels, from the log (the same route, the same response shape):
+
+| Input | content_id | model | style | combined | guess |
+|---|---|---|---|---|---|
+| landlord piece, two sentences | `b30a7028-520f-4b6a-b398-6566851e5228` | 0.081 | 0.734 | 0.408 | unsure |
+| landlord piece, full version | `f1e17c71-f3a3-41c5-b79f-eaa41f803d33` | 0.129 | 0.317 | 0.223 | human |
+
+**An appeal**
+
+The writer of the store piece says they wrote it themselves:
 
 ```bash
-$ curl.exe -s -X POST http://127.0.0.1:5000/submit \
+$ curl.exe -s -X POST http://127.0.0.1:5000/appeal \
   -H "Content-Type: application/json" \
-  --data-binary "@landlord.json"
-# landlord.json: {"text": "ok so my landlord finally fixed the heater at 2am, in a thunderstorm, wearing a raincoat indoors. nobody tells you that adulthood is mostly negotiating with a guy named Dmitri about boilers.", "creator_id": "u2"}
+  --data-binary "@appeal.json"
+# appeal.json: {"content_id": "64d0d52a-092d-4c85-bdda-a50ccb6c85ef", "reasoning": "I wrote this myself. It is a plain description of a trip to the shop."}
 ```
 
 ```json
 {
-  "confidence": 0.0,
-  "content_id": "6007fe41-8850-4ea6-85f8-104f2e32c233",
-  "guess": "human",
-  "label": "placeholder",
-  "model_score": 0.0812,
-  "style_score": null
+  "content_id": "64d0d52a-092d-4c85-bdda-a50ccb6c85ef",
+  "message": "Thanks. Your appeal has been recorded and this piece is now under review. Nothing further is needed from you.",
+  "status": "under_review"
 }
 ```
 
-**An appeal**
-
-```bash
-$ curl -X POST http://127.0.0.1:5000/appeal \
-  -H "Content-Type: application/json" \
-  -d '{"content_id": "...", "reasoning": "..."}'
-```
-
-```json
-
-```
+An unknown `content_id` returns HTTP 404 (`not_found`), and a missing `reasoning` returns HTTP 400 (`bad_request`). Neither writes to the log.
 
 **What the log shows afterwards**
 
 ```bash
-$ curl.exe -s "http://127.0.0.1:5000/log?limit=2"
+$ curl.exe -s "http://127.0.0.1:5000/log?limit=6"
 ```
+
+The original decision keeps `"status": "decided"`. The appeal is a second entry after it with `"status": "under_review"`. The first two entries have `"label": null` because they were logged before the label was wired in.
 
 ```json
 {
-  "count": 2,
+  "count": 6,
   "entries": [
     {
-      "combined_score": null,
-      "content_id": "c80e9c6f-6194-485e-8dff-2292fce1fa8b",
+      "combined_score": 0.8047871527611741,
+      "content_id": "06f528e3-09e7-4d78-9235-c32e928d2c94",
       "creator_id": "u1",
       "guess": "ai",
       "label": null,
       "model_score": 0.8763,
       "status": "decided",
-      "style_score": null,
-      "timestamp": "2026-10-11T18:27:16+00:00"
+      "style_score": 0.7332743055223481,
+      "timestamp": "2026-10-11T18:43:01+00:00"
     },
     {
-      "combined_score": null,
-      "content_id": "6007fe41-8850-4ea6-85f8-104f2e32c233",
+      "combined_score": 0.40778749999999997,
+      "content_id": "64f96da1-399a-4aba-8d4b-361515069193",
       "creator_id": "u2",
       "guess": "human",
       "label": null,
       "model_score": 0.0812,
       "status": "decided",
-      "style_score": null,
-      "timestamp": "2026-10-11T18:27:22+00:00"
+      "style_score": 0.734375,
+      "timestamp": "2026-10-11T18:43:07+00:00"
+    },
+    {
+      "combined_score": 0.8047871527611741,
+      "content_id": "64d0d52a-092d-4c85-bdda-a50ccb6c85ef",
+      "creator_id": "u1",
+      "guess": "ai",
+      "label": "Our check thinks this may have been written with an AI tool. It can be wrong, especially on plain or simple writing. If you wrote it yourself, you can appeal and a person will take a look.",
+      "model_score": 0.8763,
+      "status": "decided",
+      "style_score": 0.7332743055223481,
+      "timestamp": "2026-10-11T20:00:57+00:00"
+    },
+    {
+      "combined_score": 0.40778749999999997,
+      "content_id": "b30a7028-520f-4b6a-b398-6566851e5228",
+      "creator_id": "u2",
+      "guess": "unsure",
+      "label": "We can't tell whether this was written by a person or by an AI tool. Our check looked at it and came out unsure, which happens with plenty of work that people wrote themselves. No one has decided anything about this piece.",
+      "model_score": 0.0812,
+      "status": "decided",
+      "style_score": 0.734375,
+      "timestamp": "2026-10-11T20:01:06+00:00"
+    },
+    {
+      "combined_score": 0.22309161389045523,
+      "content_id": "f1e17c71-f3a3-41c5-b79f-eaa41f803d33",
+      "creator_id": "u3",
+      "guess": "human",
+      "label": "We think this was probably written by a person. Our check is only a guess, but nothing in it stood out to us.",
+      "model_score": 0.1288,
+      "status": "decided",
+      "style_score": 0.3173832277809105,
+      "timestamp": "2026-10-11T20:03:04+00:00"
+    },
+    {
+      "content_id": "64d0d52a-092d-4c85-bdda-a50ccb6c85ef",
+      "creator_id": "u1",
+      "event": "appeal",
+      "reasoning": "I wrote this myself. It is a plain description of a trip to the shop.",
+      "status": "under_review",
+      "timestamp": "2026-10-11T20:04:01+00:00"
     }
   ]
 }
