@@ -68,6 +68,10 @@ mean something without demanding more than two weak signals can give.
 Submitting 15 pieces through `/submit` (5 AI-generated, 5 human-written, and 5
 borderline) returns each of `human`, `unsure` and `ai` for at least 3 of the 15 pieces, in every trial.
 
+The 5 borderline pieces are chosen by origin, not by score: 3 AI-written
+pieces I edited by hand, and 2 mixed pieces (half mine, half AI). The same 15
+pieces are used in every trial.
+
 **Why this target:** A label that can never fire is a lie in the interface, and
 `unsure` is the label my design relies on to protect plain-writing humans.
 `ai` is the hardest to reach, because my design requires both signals to agree.
@@ -91,8 +95,11 @@ original decision stays visible beside the appeal.
 A `POST /submit` with `text` set to an empty string or only spaces returns 400
 `invalid_input` in 3 of 3 tries, never a 200 or a 500.
 
-**Why this target:** An empty submission has nothing to judge, and scoring it
-would produce a made-up label that a writer could be held to.
+**Why this target:** An empty string gives my style signal nothing to measure
+(it falls back to 0.5, "no evidence") and my model signal nothing to read, so
+any score would be invented and could still land on a label a writer could be
+held to. Refusing it with a 400 is the only honest answer, and 3 of 3 is the
+bar because there is no input where a made-up label is acceptable.
 
 ---
 
