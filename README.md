@@ -302,25 +302,38 @@ The original decision keeps `"status": "decided"`. The appeal is a second entry 
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 5 per minute, 50 per day
 
 **Why those numbers and not others:**
-<!-- Think about two people: a real writer submitting their own work a few
-     times an hour, and a script sending a thousand variations to map your
-     thresholds. Your numbers have to be liveable for the first and hostile to
-     the second. -->
+A real writer submits a few pieces an hour. Even a burst of revisions is rarely
+more than two or three in a minute, so 5 per minute never gets in their way and
+50 per day is far more than anyone submits honestly. A script mapping my
+thresholds needs hundreds of variations to find where "unsure" flips to "ai".
+The per-minute cap slows that to a crawl, and the daily cap limits it to 50
+probes per identity per day. I didn't go lower than 5 because a writer who
+pastes in a few drafts back to back shouldn't be locked out; I didn't go higher
+because 10 per minute would give a script twice the probing rate for no benefit
+to real users.
 
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+**What a caller counts as:** The `creator_id` in the request body, falling back
+to the caller's IP address when there isn't one (`rate_limit_key` in `app.py`).
+Keying on `creator_id` means one household sharing an address doesn't share a
+limit. The weakness is that the caller chooses their own `creator_id`, so a
+script can rotate IDs to get a fresh allowance each time. Counts are also held
+in memory, so a restart resets every limit.
 
 **The run of status codes when I pushed past it:**
 
-<!-- python run_attacks.py --flood 15 -->
+`python run_attacks.py --flood 15` (15 submissions as `flood_tester`):
 
 ```
-
+200 200 200 200 200 429 429 429 429 429 429 429 429 429 429
 ```
+
+10 of 15 were rate limited. Each rejection was written to the audit log with
+`event: "rejected"`, `reason: "rate_limited"` and the limit that was hit, so a
+flood shows up in `GET /log` and not as a gap. Full output is in
+`results/flood_2026-10-11_2009.md`.
 
 ---
 
