@@ -369,7 +369,7 @@ whose work got caught by it:
 | 2. Clearly-AI and clearly-human text score apart | mean `combined_score` gap ≥ 0.25 | 0.111 | 0.111 | 0.111 | MISSED |
 | 3. All three labels reachable | `human`, `unsure`, `ai` each ≥ 3 of 15, every trial | 0 / 4 / 11 | 0 / 4 / 11 | 0 / 4 / 11 | MISSED |
 | 4. Appeal recorded, decision kept | 10 of 10 | 10/10 | 10/10 | 10/10 | MET |
-| 5. Empty text refused | 400 `invalid_input`, 3 of 3 | 3/3 | 3/3 | 3/3 | MET on status, but the error code is `bad_request`, not `invalid_input` |
+| 5. Empty text refused | 400 `invalid_input`, 3 of 3 | 3/3 | 3/3 | 3/3 | MISSED (400 every time, but the code is `bad_request`, not the `invalid_input` the target names) |
 
 Criterion 3 cells read `human / unsure / ai`. All three runs for criteria 1, 2,
 3 and 5 are the three trials of one `run_eval.py --label before` invocation
@@ -610,7 +610,7 @@ The response body from `app.py::submit` for an empty `text`:
 }
 ```
 
-**Diagnoses**
+## Diagnoses
 
 <!-- For each miss AND each broken attack: the stage and the mechanism.
 
@@ -625,6 +625,87 @@ The response body from `app.py::submit` for an empty `text`:
                         signal at 0.6, so it dragged the whole score down."
 
      Look for a pattern. Five failures on one signal is one problem, not five. -->
+
+**How each verdict was decided.** Each target was compared with the numbers in
+all three trials, and it has to hold in every trial. The trials were identical
+(see above), so no criterion is "met on some trials".
+
+- **1. MISSED.** 4 of 10 of my own pieces came back `ai`, against a target of at
+  most 1, in all three trials.
+- **2. MISSED.** The gap in mean `combined_score` is 0.111 (AI 0.768, human
+  0.658) against a target of at least 0.25.
+- **3. MISSED.** `human` fired for 0 of 15 pieces, against at least 3 in every
+  trial. `unsure` (4) and `ai` (11) cleared the bar.
+- **4. MET.** 10 of 10 appeals left both the `decided` and `under_review` entries,
+  in all three runs.
+- **5. MISSED.** The target says 400 `invalid_input`. The status was 400 in 3 of 3,
+  but `app.py::submit` returns the code `bad_request`. The criterion names the
+  code, so the code is part of the target. I had first written this as "MET on
+  status", which is the generous reading, so I changed it to MISSED.
+
+**Misses 1, 2 and 3 are one problem: signal two (`stylometry.py::style_signal`)
+barely separates AI from human text, and it sits high for both.** I measured it
+on the 10 pieces of the spread scenario (`logs/audit.jsonl`) and the 10 of
+criterion 1:
+
+| | AI pieces (5) | my own pieces (10) | gap |
+|---|---|---|---|
+| `model_score` mean | 0.843 | 0.636 | 0.207 |
+| `style_score` mean | 0.694 | 0.648 | 0.046 |
+
+- **Stage and mechanism, miss 2 (signal two).** The style signal separates the
+  groups by 0.046, so it adds almost nothing beyond the model signal. It cannot
+  read, and short plain human writing looks like AI to it: even, mid-length
+  sentences and a narrow vocabulary. Of my 10 pieces, 7 scored 0.58 or higher on
+  style (0.83, 0.72, 0.73, 0.73, 0.82, 0.83, 0.59). I have not yet separated
+  which of the three sub-measures (sentence spread, type-token ratio,
+  punctuation) pushes them up. That is the next thing to test, so I am not
+  claiming one.
+- **Stage and mechanism, miss 2 (combining rule).** `scoring.py::combine_signals`
+  weights the two signals 0.5 and 0.5. That gives the weak signal half of the
+  vote, so the 0.207 gap in the model signal is cut to 0.111 in the combined
+  score. A flat average assumes both signals are equally informative, and they
+  are not.
+- **Stage and mechanism, miss 1 (signal two and the combining rule).** Four
+  pieces of mine were called `ai`: the work message (model 0.56, style 0.83), the
+  daily routine (0.87, 0.73), the advice (0.91, 0.82) and my reason for my
+  major (0.90, 0.83). Style is 0.73 or higher in all four, and in the work
+  message it carries the piece alone: 0.56 on the model signal would be `unsure`,
+  but the 0.83 style score lifts the average to 0.695, over the 0.65 line. Those
+  are plain, short, conventional pieces, which is the writing the model signal
+  also misreads (low perplexity), so both signals fail together. The disagreement
+  rule did not catch these because the gap is 0.26, below the 0.35 trigger. My
+  design said neither signal alone should be enough for `ai`, and the style
+  score alone was enough here.
+- **Stage and mechanism, miss 3 (label mapping, caused upstream).**
+  `scoring.py::score_to_label` calls `human` only at 0.35 or below. The lowest
+  combined score of any of my pieces was 0.384 (model 0.46, style 0.30), just
+  over the line, and the next lowest was 0.455. Reaching 0.35 needs both signals
+  low at once, and style is low (under 0.35) for only one of the 10 pieces. The
+  mapping is not broken. The human mean combined score (0.658) sits on the 0.65
+  `AI_THRESHOLD`, and the human cutoff is out of reach for the same reason:
+  signal two reads human text as AI-ish, so scores bunch between 0.38 and 0.9.
+  (This also corrects the Criterion 3 note above, which calls 0.518 the lowest
+  score. 0.518 is the lowest model score, not the lowest combined score.)
+- **Stage and mechanism, miss 5 (the route).** `app.py::submit` rejects empty text
+  correctly but returns `"error": "bad_request"`. This is a naming mismatch, not
+  a logic fault. The fix is the string, in the route.
+
+**Where it points.** Signal two is in all three of the score-based misses (1, 2
+and 3), so the first fix target is the style signal's ramps in `config.py`
+(`SPREAD_AI_HUMAN`, `TTR_AI_HUMAN`, `PUNCT_AI_HUMAN`), or its weight in
+`combine_signals`. The route error code is an unrelated one-line fix.
+
+**Targets: were they too low?** No. They were not met, so none was too easy.
+The criterion I would tighten next is 3: it asks only for 3 of 15 per label, and
+the 5 borderline pieces are not scored by it, so a service could pass while
+sending every human piece to `unsure`. I am not revising any criterion in this
+unit: all five were measurable, and I missed them. Lowering a number I missed
+would not be a revision.
+
+**Attacks.** I have not run the attack set yet (`run_attacks.py --label before`
+has no output in `results/`), so I have no broken attacks to diagnose. The attack
+diagnoses go here once that run exists.
 
 
 

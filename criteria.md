@@ -50,6 +50,8 @@ Of 10 human-written pieces, at most 1 gets `guess: "ai"`.
 more than a missed detection costs the site, so 1 in 10 is the most I will
 accept.
 
+**Verdict (unit 8, before): MISSED.** 4 of 10 of my pieces came back `ai` in all three trials; the target was at most 1.
+
 ---
 
 ## 2. Clearly-AI and clearly-human text score apart
@@ -60,6 +62,8 @@ the mean of 5 human-written pieces.
 **Why this target:** If the two groups score close together, any threshold is
 arbitrary. 0.25 is a quarter of the scale, which is enough for the labels to
 mean something without demanding more than two weak signals can give.
+
+**Verdict (unit 8, before): MISSED.** Mean gap was 0.111 (AI 0.768, human 0.658) in all three trials; the target was 0.25.
 
 ---
 
@@ -76,6 +80,8 @@ pieces are used in every trial.
 `unsure` is the label my design relies on to protect plain-writing humans.
 `ai` is the hardest to reach, because my design requires both signals to agree.
 
+**Verdict (unit 8, before): MISSED.** Counts were 0 `human` / 4 `unsure` / 11 `ai` in every trial; `human` never fired.
+
 ---
 
 ## 4. An appeal is recorded without overwriting the decision
@@ -87,6 +93,8 @@ is true for 10 of 10 appeals.
 **Why this target:** The appeal is the only recourse for a wrongly labelled
 writer, so there is no acceptable failure rate. The log is append-only so the
 original decision stays visible beside the appeal.
+
+**Verdict (unit 8, before): MET.** 10 of 10 appeals kept both entries, in all three runs.
 
 ---
 
@@ -100,6 +108,8 @@ A `POST /submit` with `text` set to an empty string or only spaces returns 400
 any score would be invented and could still land on a label a writer could be
 held to. Refusing it with a 400 is the only honest answer, and 3 of 3 is the
 bar because there is no input where a made-up label is acceptable.
+
+**Verdict (unit 8, before): MISSED.** The status was 400 in 3 of 3, but the error code returned is `bad_request`, not `invalid_input`.
 
 ---
 
