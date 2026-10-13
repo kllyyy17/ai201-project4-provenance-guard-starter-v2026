@@ -365,17 +365,249 @@ whose work got caught by it:
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |
+| 1. My own writing flagged as AI | ≤ 1 of 10 `ai` | 4/10 | 4/10 | 4/10 | MISSED |
+| 2. Clearly-AI and clearly-human text score apart | mean `combined_score` gap ≥ 0.25 | 0.111 | 0.111 | 0.111 | MISSED |
+| 3. All three labels reachable | `human`, `unsure`, `ai` each ≥ 3 of 15, every trial | 0 / 4 / 11 | 0 / 4 / 11 | 0 / 4 / 11 | MISSED |
+| 4. Appeal recorded, decision kept | 10 of 10 | 10/10 | 10/10 | 10/10 | MET |
+| 5. Empty text refused | 400 `invalid_input`, 3 of 3 | 3/3 | 3/3 | 3/3 | MET on status, but the error code is `bad_request`, not `invalid_input` |
+
+Criterion 3 cells read `human / unsure / ai`. All three runs for criteria 1, 2,
+3 and 5 are the three trials of one `run_eval.py --label before` invocation
+(`results/run_2026-10-12_1945_before.md`). Criterion 4 is three separate runs of
+`appeal_check.py --label before` (`results/appeal_2026-10-12_1945_before.md`,
+`..._1954_before.md`, `..._1956_before.md`).
+
+**The three trials were identical.** Every score matched to the last decimal in
+all three trials. GPT-2 runs in evaluation mode with no sampling, so the same
+input gives the same perplexity every time. The runs were real re-runs. The model
+signal here simply doesn't vary, so three trials add no run-to-run evidence.
+
+**Criterion 2 numbers.** `run_eval.py` doesn't record `combined_score`, so the
+gap is computed from `logs/audit.jsonl` (written by `audit.py::log_decision`).
+Mean combined score: AI pieces 0.768, human pieces 0.658, gap 0.111.
+
+**Criterion 5.** The status is 400 in every trial, but the error code returned
+is `bad_request` (`app.py::submit`), not the `invalid_input` named in
+`criteria.md`.
 
 **Real output from one trial**, pasted as text, naming the file and function
 that produced it:
 
-```json
+**Criterion 1.** The four pieces of my own writing labelled `ai` (trial 1 of
+`results/run_2026-10-12_1945_before.md`, produced by `run_eval.py::main`). They
+are the work message, the daily routine, the advice to a new student and the
+reason for my major. The other six came back `unsure`.
 
+```json
+[
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.6948,
+    "model_score": 0.5632,
+    "style_score": 0.826388888888889,
+    "label": "Our check thinks this may have been written with an AI tool. It can be wrong, especially on plain or simple writing. If you wrote it yourself, you can appeal and a person will take a look.",
+    "sent": "Hi, I've updated the driver for the RAFT tool, and I'm checking if eve"
+  },
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.8,
+    "model_score": 0.8723,
+    "style_score": 0.7277952880949976,
+    "label": "Our check thinks this may have been written with an AI tool. It can be wrong, especially on plain or simple writing. If you wrote it yourself, you can appeal and a person will take a look.",
+    "sent": "My weekdays are usually pretty similar. I wake up, get ready, and go t"
+  },
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.8639,
+    "model_score": 0.9091,
+    "style_score": 0.8187962684875102,
+    "label": "Our check thinks this may have been written with an AI tool. It can be wrong, especially on plain or simple writing. If you wrote it yourself, you can appeal and a person will take a look.",
+    "sent": "My advice is to take advantage of the opportunities you have in colleg"
+  },
+  {
+    "status": 200,
+    "guess": "ai",
+    "confidence": 0.8657,
+    "model_score": 0.9002,
+    "style_score": 0.8312028546252666,
+    "label": "Our check thinks this may have been written with an AI tool. It can be wrong, especially on plain or simple writing. If you wrote it yourself, you can appeal and a person will take a look.",
+    "sent": "I've been interested in computers since I was young. At first, I mostl"
+  }
+]
+```
+
+**Criterion 2.** The 10 pieces of the spread scenario (5 AI, then 5 human), from
+`logs/audit.jsonl`, written by `audit.py::log_decision` (selected fields). The
+first five are the AI pieces.
+
+```json
+[
+  {
+    "creator_id": "eval_c2 score spr_1",
+    "guess": "ai",
+    "model_score": 0.8613,
+    "style_score": 0.7435897435897436,
+    "combined_score": 0.8024448717948718
+  },
+  {
+    "creator_id": "eval_c2 score spr_2",
+    "guess": "ai",
+    "model_score": 0.8081,
+    "style_score": 0.6875,
+    "combined_score": 0.7478
+  },
+  {
+    "creator_id": "eval_c2 score spr_3",
+    "guess": "ai",
+    "model_score": 0.8961,
+    "style_score": 0.6849489795918368,
+    "combined_score": 0.7905244897959184
+  },
+  {
+    "creator_id": "eval_c2 score spr_4",
+    "guess": "ai",
+    "model_score": 0.7583,
+    "style_score": 0.7375,
+    "combined_score": 0.7479
+  },
+  {
+    "creator_id": "eval_c2 score spr_5",
+    "guess": "ai",
+    "model_score": 0.8904,
+    "style_score": 0.6147307761984235,
+    "combined_score": 0.7525653880992118
+  },
+  {
+    "creator_id": "eval_c2 score spr_6",
+    "guess": "ai",
+    "model_score": 0.5632,
+    "style_score": 0.826388888888889,
+    "combined_score": 0.6947944444444445
+  },
+  {
+    "creator_id": "eval_c2 score spr_7",
+    "guess": "unsure",
+    "model_score": 0.3193,
+    "style_score": 0.7168991082411456,
+    "combined_score": 0.5180995541205727
+  },
+  {
+    "creator_id": "eval_c2 score spr_8",
+    "guess": "ai",
+    "model_score": 0.8723,
+    "style_score": 0.7277952880949976,
+    "combined_score": 0.8000476440474988
+  },
+  {
+    "creator_id": "eval_c2 score spr_9",
+    "guess": "unsure",
+    "model_score": 0.5435,
+    "style_score": 0.7261149616915934,
+    "combined_score": 0.6348074808457966
+  },
+  {
+    "creator_id": "eval_c2 score spr_10",
+    "guess": "unsure",
+    "model_score": 0.8973,
+    "style_score": 0.4620818369610723,
+    "combined_score": 0.64
+  }
+]
+```
+
+**Criterion 3.** No piece returned `human`. The lowest-scoring of the 15, a
+human-written piece, is the closest it got (`run_eval.py::main`, trial 1):
+
+```json
+{
+  "status": 200,
+  "guess": "unsure",
+  "confidence": 0.5181,
+  "model_score": 0.3193,
+  "style_score": 0.7168991082411456,
+  "label": "We can't tell whether this was written by a person or by an AI tool. Our check looked at it and came out unsure, which happens with plenty of work that people wrote themselves. No one has decided anything about this piece.",
+  "sent": "Spent 2 hours fixing a bug today just to realize I broke it myself yes"
+}
+```
+
+Across all 15 pieces in that trial: 0 `human`, 4 `unsure`, 11 `ai`.
+
+**Criterion 4.** One of the 10 appeals (`appeal_check.py::main`, from
+`results/appeal_2026-10-12_1945_before.md`), showing the original `decided` entry
+and the `under_review` entry for the same `content_id`:
+
+```json
+{
+  "submit_status": 200,
+  "content_id": "c9ee80c7-8e4c-4fcd-b9bc-cb6766c53a5d",
+  "appeal_status": 200,
+  "appeal_response": {
+    "content_id": "c9ee80c7-8e4c-4fcd-b9bc-cb6766c53a5d",
+    "message": "Thanks. Your appeal has been recorded and this piece is now under review. Nothing further is needed from you.",
+    "status": "under_review"
+  },
+  "has_decided": true,
+  "has_under_review": true,
+  "pass": true,
+  "log_entries": [
+    {
+      "combined_score": 0.8024448717948718,
+      "content_id": "c9ee80c7-8e4c-4fcd-b9bc-cb6766c53a5d",
+      "creator_id": "eval_appeal_194535_1",
+      "guess": "ai",
+      "label": "Our check thinks this may have been written with an AI tool. It can be wrong, especially on plain or simple writing. If you wrote it yourself, you can appeal and a person will take a look.",
+      "model_score": 0.8613,
+      "status": "decided",
+      "style_score": 0.7435897435897436,
+      "timestamp": "2026-10-12T23:45:38+00:00"
+    },
+    {
+      "content_id": "c9ee80c7-8e4c-4fcd-b9bc-cb6766c53a5d",
+      "creator_id": "eval_appeal_194535_1",
+      "event": "appeal",
+      "reasoning": "I wrote this myself.",
+      "status": "under_review",
+      "timestamp": "2026-10-12T23:45:38+00:00"
+    }
+  ]
+}
+```
+
+**Criterion 5.** Empty and whitespace-only text (`run_eval.py::main`, trial 1):
+
+```json
+[
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "(empty text)"
+  },
+  {
+    "status": 400,
+    "guess": null,
+    "confidence": null,
+    "model_score": null,
+    "style_score": null,
+    "label": null,
+    "sent": "   "
+  }
+]
+```
+
+The response body from `app.py::submit` for an empty `text`:
+
+```json
+{
+  "error": "bad_request",
+  "message": "text is required"
+}
 ```
 
 **Diagnoses**
