@@ -451,10 +451,15 @@ decision, with the score fields `null` because nothing was scored, plus
 
 Things the log shows: it records scores, label and status but not the
 submitted text, so a decision can't be re-checked from the log alone. Rate-limit
-rejections (429) are logged as `rejected` entries, with the nine fields. Input
-rejections (400) are not logged, and the limiter runs before validation, so
-the RQ10 and RQ11 attacks came back 429 and were logged as rate-limited, not as
-the malformed requests they were. Rejection entries written before this change
+rejections (429) are logged as `rejected` entries, with the nine fields. I
+checked the 400 path afterwards by sending an empty text, a missing
+`creator_id` and a one-character text; each wrote a `bad_request` entry and the
+responses were unchanged. Input
+rejections (400) are now logged too (`reason: "bad_request"`, plus the
+message), with the same nine fields. That was added after the attack runs, so
+the 56-attack results contain no 400 entries. The limiter runs before
+validation, so the RQ10 and RQ11 attacks came back 429 and were logged as
+rate-limited, not as the malformed requests they were. Rejection entries written before this change
 (including the first flood, 2026-10-11) lack the nine-field shape. The log's `combined_score` and the response's `confidence`
 differ for "unsure" results (PI05: 0.469 logged, 0.531 returned).
 
@@ -997,7 +1002,7 @@ below is unfixed because I stopped at one change, not because it can't be fixed.
 | Criterion | Status | What I'd do | Why I stopped |
 |---|---|---|---|
 | 5. Empty text refused with `invalid_input` | Missed | Change the string `bad_request` to `invalid_input` in `app.py::submit` for the empty-text case. | One line, and I'd do it first. I left it so the weights were the only change and the before/after comparison stays clean. |
-| 1. Own writing flagged `ai` (3/10, target ≤ 1) | Missed | Measure which style sub-measure pushes plain writing up, then flatten that ramp in `config.py`. Then re-check on a larger sample than my 10 pieces. | One change per unit. Also, signal one scores 3 of my pieces at 0.87–0.91, and no weight fixes that. |
+| 1. Own writing flagged `ai` (3/10, target ≤ 1) | Missed | I measured it: spread drives the style score on my pieces (punctuation is a constant floor). Flatten or cap the spread ramp in `config.py` (`SPREAD_AI_HUMAN`), then re-check on a larger sample than my 10 pieces, and re-run EV02, EV03, EV05 and EV06, which move the same measure. | One change per unit. Also, signal one scores 3 of my pieces at 0.87–0.91, and no weight fixes that. |
 | 2. Clear AI vs clear human gap (0.197, target 0.25) | Missed | Weight alone won't reach it: the ceiling is about 0.207, the model signal's own gap. It needs a better second signal, or a better first one. | A new signal is a redesign, not a tweak. |
 | 3. `human` reachable (0 of 15, target 3) | Missed | Fix 1 and 2 first. `human` needs a combined score under 0.35, and my lowest is 0.384. Moving `HUMAN_THRESHOLD` alone would make the criterion pass without making the service better, so I would not do that. | The cause is upstream. |
 

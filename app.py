@@ -205,16 +205,25 @@ def submit():
     text = payload.get("text")
     creator_id = payload.get("creator_id")
 
+    def reject(message):
+        """A refused input still leaves a trace, same as a rate-limit rejection."""
+        audit.log_rejection(
+            creator_id=creator_id if isinstance(creator_id, str) and creator_id.strip() else "unknown",
+            reason="bad_request",
+            message=message,
+        )
+        return jsonify({"error": "bad_request", "message": message}), 400
+
     if not isinstance(text, str) or not text.strip():
-        return jsonify({"error": "bad_request", "message": "text is required"}), 400
+        return reject("text is required")
     if not isinstance(creator_id, str) or not creator_id.strip():
-        return jsonify({"error": "bad_request", "message": "creator_id is required"}), 400
+        return reject("creator_id is required")
 
     import detector
     try:
         model_score = detector.model_signal(text)
     except ValueError as exc:  # too short to score
-        return jsonify({"error": "bad_request", "message": str(exc)}), 400
+        return reject(str(exc))
     except detector.DetectorUnavailable as exc:
         return jsonify({"error": "detector_unavailable", "message": str(exc)}), 503
 
