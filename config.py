@@ -54,8 +54,8 @@ DETECTOR_MAX_TOKENS = 400
 # down BEFORE you code it, and to put the numbers in your README. Whatever you
 # decide, it goes here.
 
-WEIGHT_MODEL_SIGNAL = 0.5
-WEIGHT_STYLE_SIGNAL = 0.5
+WEIGHT_MODEL_SIGNAL = 0.8   # was 0.5
+WEIGHT_STYLE_SIGNAL = 0.2   # was 0.5
 
 # If the two signals differ by more than this, they disagree, and the combined
 # score is forced into the unsure band instead of trusting either one.

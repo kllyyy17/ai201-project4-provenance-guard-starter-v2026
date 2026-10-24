@@ -796,9 +796,9 @@ sending every human piece to `unsure`. I am not revising any criterion in this
 unit: all five were measurable, and I missed them. Lowering a number I missed
 would not be a revision.
 
-**Attacks.** I have not run the attack set yet (`run_attacks.py --label before`
-has no output in `results/`), so I have no broken attacks to diagnose. The attack
-diagnoses go here once that run exists.
+**Attacks.** The before run exists (`results/attack_run_2026-10-21_2122_before.md`,
+24 broke). The per-attack diagnoses (stage and mechanism) are still to be
+written here.
 
 
 
@@ -806,21 +806,83 @@ diagnoses go here once that run exists.
 
 ## The Improvement
 
-**What I changed:**
+**What I changed:** One edit in `config.py`: the signal weights went from
+`WEIGHT_MODEL_SIGNAL = 0.5` / `WEIGHT_STYLE_SIGNAL = 0.5` to `0.8` / `0.2`.
+Thresholds, disagreement gap, style ramps and the route's error code were left
+alone. The signal scores are identical before and after (GPT-2 is deterministic,
+e.g. EV01 is model 0.1635, style 0.75 in both runs), so every difference below
+comes from the weights.
 
-**Which diagnosis pointed at it:**
+**Which diagnosis pointed at it:** Miss 2, combining rule. Style separates AI
+from human by 0.046 and the model signal by 0.207, but a flat 0.5/0.5 average
+gave the weak signal half the vote and cut the combined gap to 0.111.
+
+**Prediction written before the run:** gap about 0.175 (0.8 × 0.207 + 0.2 × 0.046);
+criterion 1 from 4 to about 3; `human` still not reached; injection attacks
+possibly worse because the model signal, which injected text moves, now counts
+for more.
+
+### Criteria — before and after
+
+| Criterion | Target | Before | After | Verdict |
+|---|---|---|---|---|
+| 1. My own writing flagged as AI | ≤ 1 of 10 `ai` | 4/10 | 3/10 | MISSED |
+| 2. Clear AI vs clear human apart | gap ≥ 0.25 | 0.111 | 0.197 (AI 0.813, human 0.616) | MISSED |
+| 3. All three labels reachable | each ≥ 3 of 15 | 0 / 4 / 11 | 0 / 5 / 10 | MISSED |
+| 4. Appeal recorded, decision kept | 10 of 10 | 10/10 | 10/10 | MET |
+| 5. Empty text refused | 400 `invalid_input` | 400 `bad_request` | 400 `bad_request` | MISSED (untouched) |
+
+After run: `results/run_2026-10-23_2040_after.md` (criteria 1, 2, 3, 5, three
+identical trials) and `results/appeal_2026-10-23_2041_after.md` (criterion 4).
+Criterion 2 is computed from `logs/audit.jsonl`, as before. Criterion 1 `ai`
+pieces were numbers 3, 7 and 9; the work message moved from `ai` (0.695) to
+`unsure`.
 
 ### Attack Run — After
 
-<!-- Same format. `run_attacks.py --label after` -->
+56 attacks sent with `python run_attacks.py --set attacks --label after`
+(full output: `results/attack_run_2026-10-23_2040_after.md`). No 5xx and no
+crashes. Same verdict rule as the before run.
 
+**Count: 22 broke, 34 held (of 56). Before: 24 broke, 32 held.**
 
+| Family | Broke before | Broke after |
+|---|---|---|
+| Evasion (10) | 8 | 8 (EV01–EV08) |
+| False positive (8) | 7 | 6 (FP02–FP07) |
+| Prompt injection (6) | 3 | 2 (PI02, PI03) |
+| Malformed content (8) | 6 | 6 (MF03–MF08) |
+| Malformed requests (12) | 0 | 0 |
+| Flood, one creator (12) | 0 | 0 |
 
-**Did it help, and how do I know:**
+Rows whose verdict changed:
 
-<!-- Widening the unsure band usually fixes one problem and creates another.
-     Reporting that trade honestly is worth full credit. -->
+| ID | Before | After | Verdict change |
+|---|---|---|---|
+| FP01 | ai 0.652 | unsure | broke → held |
+| EV09 | unsure 0.628 | ai 0.674 | broke → held |
+| PI06 | injected `unsure`, control `ai` | injected `unsure`, control `unsure` | broke → held |
+| EV04 | ai 0.681 | unsure 0.639 | held → **broke** |
+| EV05 | unsure | human (combined 0.341) | still broke, now reads as human |
+| PI02 | human, combined 0.295 | human, combined 0.240 | still broke, further from its control |
 
+A diff of the two result tables shows exactly four labels changed (EV04, EV05,
+EV09, FP01). PI06's label is `unsure` in both runs; its verdict changed because
+its control moved. The after-state PI controls were **recomputed from the saved
+signal scores** under the new weights, not re-run live (PI02 control 0.64
+`unsure`, PI03 control 0.743 `ai`, PI06 control 0.632 `unsure`). PI02 and PI03
+still change the label against their controls.
+
+**Did it help, and how do I know:** A little, and it fixed no criterion.
+Attacks that broke fell from 24 to 22 (three gained, one lost), the criterion 2
+gap rose from 0.111 to 0.197 (target 0.25), and criterion 1 went from 4 to 3
+of 10 (target 1). The trade is that I now trust the model signal more, so its
+errors count more. EV04 was caught before only because its style score (0.75)
+pulled the average over 0.65, and with style at 0.2 it slips to `unsure`.
+EV05 (heavy human edit of AI text) now comes back `human`, and PI02's
+injection pushes the score further toward `human`. FP02–FP07 and the junk
+inputs did not move, because the model signal itself calls them AI. The
+remaining problem is the model signal, and reweighting cannot fix that.
 
 
 ---
