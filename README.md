@@ -449,19 +449,22 @@ decision, with the score fields `null` because nothing was scored, plus
 {"timestamp": "2026-10-24T01:12:08+00:00", "content_id": null, "creator_id": "flood_tester_2", "guess": null, "model_score": null, "style_score": null, "combined_score": null, "label": null, "status": "rejected", "event": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
 ```
 
-Things the log shows: it records scores, label and status but not the
-submitted text, so a decision can't be re-checked from the log alone. Rate-limit
-rejections (429) are logged as `rejected` entries, with the nine fields. I
-checked the 400 path afterwards by sending an empty text, a missing
-`creator_id` and a one-character text; each wrote a `bad_request` entry and the
-responses were unchanged. Input
-rejections (400) are now logged too (`reason: "bad_request"`, plus the
-message), with the same nine fields. That was added after the attack runs, so
-the 56-attack results contain no 400 entries. The limiter runs before
-validation, so the RQ10 and RQ11 attacks came back 429 and were logged as
-rate-limited, not as the malformed requests they were. Rejection entries written before this change
-(including the first flood, 2026-10-11) lack the nine-field shape. The log's `combined_score` and the response's `confidence`
-differ for "unsure" results (PI05: 0.469 logged, 0.531 returned).
+Things the log shows:
+
+- It records scores, label and status but not the submitted text, so a decision
+  can't be re-checked from the log alone.
+- Rate-limit rejections (429) are logged as `rejected` entries with the nine
+  fields (pasted above). Rejection entries written before this change, including
+  the first flood on 2026-10-11, lack the nine-field shape.
+- Input rejections (400) are now logged too (`reason: "bad_request"` plus the
+  message), with the same nine fields. I added that after the attack runs, so
+  the 56-attack results contain no 400 entries. I checked it afterwards by
+  sending an empty text, a missing `creator_id` and a one-character text; each
+  wrote a `bad_request` entry and the responses were unchanged.
+- The limiter runs before validation, so the RQ10 and RQ11 attacks came back 429
+  and were logged as rate-limited, not as the malformed requests they were.
+- The log's `combined_score` and the response's `confidence` differ for "unsure"
+  results (PI05: 0.469 logged, 0.531 returned).
 
 **The single worst outcome** — the one I'd least want to explain to a writer
 whose work got caught by it:
@@ -638,8 +641,8 @@ first five are the AI pieces.
 ]
 ```
 
-**Criterion 3.** No piece returned `human`. The lowest-scoring of the 15, a
-human-written piece, is the closest it got (`run_eval.py::main`, trial 1):
+**Criterion 3.** No piece returned `human`. The piece with the lowest model
+score of the 15 (0.319), a human-written one, is the closest it got (`run_eval.py::main`, trial 1):
 
 ```json
 {
@@ -863,9 +866,10 @@ They are four problems, not 24.
   the text. EV07 is the punctuation measure, not spread. TTR was not the lever:
   it is already 0.00 on ordinary AI text, because a 100-word window rarely
   repeats words, so it adds almost nothing to either side. One finding applies
-  to every row: the punctuation measure is 0.92 to 1.00 for all of them,
-  including human text (FP01 is 1.00), because ordinary prose sits below the 0.05
-  AI end of its ramp. It adds a near-constant 0.25 to `style_score`, which is
+  to every row except EV07: the punctuation measure is 0.92 to 1.00,
+  including on human text (FP01 is 1.00), because ordinary prose sits below the
+  0.05 AI end of its ramp. It adds a near-constant 0.23 to 0.25 to `style_score`
+  (0.23 averaged over my ten pieces, 0.25 at the full 1.00), which is
   part of why the style signal sits high for human text too (misses 1 to 3).
 - **Evasion that works on signal one, not signal two (EV01).** EV01 kept style
   at 0.75, so typos did not fool the style signal. The typos made words
@@ -976,6 +980,13 @@ signal scores** under the new weights, not re-run live (PI02 control 0.64
 still change the label against their controls.
 
 **EV04, in the diagnosis terms:** EV04 (model 0.611, style 0.750) was `ai` at 0.681 under equal weights and is `unsure` at 0.639 under 0.8 / 0.2, because the style signal was the only thing holding it over 0.65.
+
+**Prediction against result.** I predicted a gap of about 0.175. The measured
+gap is 0.197. The prediction used the model-signal and style gaps from my own
+ten pieces plus the five AI pieces, while criterion 2 compares 5 AI pieces with
+5 human pieces, so the two groups differ and the numbers are not expected to
+match exactly. Criterion 1 went from 4 to 3, as predicted, `human` was still
+not reached, as predicted, and the injection attacks did get worse (PI02).
 
 **Did it help, and how do I know:** A little, and it fixed no criterion.
 Attacks that broke fell from 24 to 22 (three gained, one lost), the criterion 2
