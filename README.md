@@ -296,6 +296,13 @@ The original decision keeps `"status": "decided"`. The appeal is a second entry 
 - *What came back:* Calibration numbers from `calibrate.py`, and a first set of label text.
 - *What I changed:* The calibration showed my plain-human input scoring 0.77, above the 0.65 AI threshold, because both signals agree it looks AI. I did not accept that the combining rule could fix this. I wrote it up as a known limit in the README. I then reworded the labels. The AI label says "may have been" and tells the writer how to appeal. The unsure label says plainly that the check couldn't tell and that nobody has decided anything. Neither uses "score", "confidence" or "threshold".
 
+**Moment 3 (unit 8): verdicts, diagnoses and the one change**
+
+- *What I asked for:* Help running my own five criteria and the 56-attack set, and a diagnosis of each miss and each broken attack.
+- *What came back:* Run scripts and result tables, a first reading that grouped the misses under signal two, and a suggested single change (the weights).
+- *What I changed:* I marked criterion 5 MISSED, not "met on status", because the target names the code `invalid_input`. I wrote my own verdict rule for the attacks, and I reduced EV08 to "weakest call". I corrected an AI-written note in the criterion 3 diagnosis that called 0.518 the lowest score (it is the lowest model score). I wrote my prediction before the after run, and reported that the change helped only a little and fixed no criterion. I also reported the attacks it made worse (EV04, EV05).
+- *What I did not do:* I did not isolate which style sub-measure drives criterion 1, so the attack diagnoses for EV02, EV03, EV06 and EV07 come from the signal's design and the labels, and the README says so.
+
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
 ---
@@ -796,9 +803,39 @@ sending every human piece to `unsure`. I am not revising any criterion in this
 unit: all five were measurable, and I missed them. Lowering a number I missed
 would not be a revision.
 
-**Attacks.** The before run exists (`results/attack_run_2026-10-21_2122_before.md`,
-24 broke). The per-attack diagnoses (stage and mechanism) are still to be
-written here.
+**Attacks.** 24 broke in the before run (`results/attack_run_2026-10-21_2122_before.md`).
+They are four problems, not 24.
+
+- **Signal one reads the wrong thing (EV01, EV08, and all of FP02–FP07).**
+  Signal one (`detector.py::model_signal`) measures predictability, not
+  authorship. Typos (EV01) make words surprising and drop the model score to
+  0.16 on AI text. Eleven words (EV08) is too little for perplexity to mean
+  anything. In the other direction, formal, careful, templated or repetitive
+  human writing (FP02–FP07) is predictable, so signal one says AI with 0.80+
+  and style agrees, so the combining rule has nothing to catch.
+- **Signal two reads shape, and shape is cheap to change (EV02, EV03, EV06,
+  EV07).** `stylometry.py::style_signal` measures sentence-length spread, word
+  variety and punctuation. Broken-up sentences, a pasted quotation, one long
+  plus one short sentence, and padded punctuation each move those numbers
+  without changing who wrote the text. I read these from the labels and the
+  signal's design; I did not isolate the sub-measure for each one.
+- **The model signal reads the submission, and the submission is
+  attacker-controlled (PI02, PI03).** A fake SYSTEM line (PI02) cut the model
+  score from 0.754 to 0.204; a "note to the reviewing system" (PI03) moved
+  `ai` to `unsure`. Nothing obeys the instruction. The text just changes what
+  GPT-2 finds predictable. EV05 (heavy human edit) is the same mechanism with
+  honest editing: both signals really did move.
+- **Nothing checks the input before scoring (MF03–MF08).** `app.py::submit`
+  rejects empty and one-character text, but sends control characters,
+  punctuation, one long word, emoji and RTL script to the model. The model
+  score swings from 0.00 to 0.998 on nonsense. MF03–MF07 all land at exactly
+  0.640: the disagreement clamp in `scoring.py::combine_signals` caps them
+  (model 0.998 vs style 0.5), so the clamp did its job but they still got a
+  verdict where they should get a 400. MF08 has no length cap, so 60,000
+  characters is accepted and scored on its first 400 tokens only.
+
+After the reweight, EV04 (unusual words) broke because style was the only
+thing catching it, and the label change is the cost of trusting signal one more.
 
 
 
@@ -889,16 +926,39 @@ remaining problem is the model signal, and reweighting cannot fix that.
 
 ## What's Still Broken
 
-<!-- For each attack still getting through and each criterion still missed:
-     what you'd do, and why you stopped. -->
+After the reweight, 22 of 56 attacks still break and four of five criteria are
+still missed. I made one change in this unit, as the unit asks, so everything
+below is unfixed because I stopped at one change, not because it can't be fixed.
 
+### Criteria still missed
 
+| Criterion | Status | What I'd do | Why I stopped |
+|---|---|---|---|
+| 5. Empty text refused with `invalid_input` | Missed | Change the string `bad_request` to `invalid_input` in `app.py::submit` for the empty-text case. | One line, and I'd do it first. I left it so the weights were the only change and the before/after comparison stays clean. |
+| 1. Own writing flagged `ai` (3/10, target ≤ 1) | Missed | Measure which style sub-measure pushes plain writing up, then flatten that ramp in `config.py`. Then re-check on a larger sample than my 10 pieces. | One change per unit. Also, signal one scores 3 of my pieces at 0.87–0.91, and no weight fixes that. |
+| 2. Clear AI vs clear human gap (0.197, target 0.25) | Missed | Weight alone won't reach it: the ceiling is about 0.207, the model signal's own gap. It needs a better second signal, or a better first one. | A new signal is a redesign, not a tweak. |
+| 3. `human` reachable (0 of 15, target 3) | Missed | Fix 1 and 2 first. `human` needs a combined score under 0.35, and my lowest is 0.384. Moving `HUMAN_THRESHOLD` alone would make the criterion pass without making the service better, so I would not do that. | The cause is upstream. |
+
+### Attacks still getting through (22)
+
+| Attacks | What I'd do | Why I stopped |
+|---|---|---|
+| MF03–MF08 (junk input gets a verdict) | Reject text that is mostly non-letters or has too few real words, and cap length (for example 20,000 characters). Return 400 with a clear code. | Easy and safe, and the most obvious fix still open. I chose the weights because they touched the criteria, and this one touches none. I'd do this second. |
+| PI02, PI03 (injected instruction moves the label) | Strip or flag lines that address a "system" or "reviewer" before scoring, and log that it happened. Better: score paragraph by paragraph so one line can't move the whole result. | Stripping is guessable by an attacker, and paragraph scoring is a redesign. |
+| EV01, EV08 (typos, very short text) | Normalise typos before scoring, and return "too short to judge" under a minimum length, not a guess. | Typo correction changes the text we score, and I haven't tested what it does to honest writers. |
+| EV02, EV03, EV06, EV07 (shape tricks) | Make the style signal harder to move: use medians, ignore quoted text, cap punctuation credit. | Needs the sub-measure test from criterion 1 first. Without it I'd be guessing. |
+| EV04, EV05 (reweight side effects) | Nothing yet. These are the price of weight 0.8 on a signal that can be fooled. | I accept them for now (see the trade below). |
+| FP02–FP07 (human text accused) | I don't think this is fixable with these two signals. Formal, plain and non-native writing is predictable, and predictability is what signal one measures. The honest fix is to stop calling it `ai` on these signals: raise `AI_THRESHOLD` or drop the `ai` label and keep only `unsure`. | This is a decision about the product, not a bug. FP03, the careful non-native writer, is the one I'd least want to explain, and it is the reason for the trade below. |
 
 **The trade I'd make if this ran for real:**
 
-<!-- Two sentences. Fewer wrong accusations means more AI text getting through.
-     Say which way you'd go and WHO PAYS FOR IT. -->
-
+I'd cut wrong accusations and accept more AI text getting through: remove the
+`ai` label or raise its threshold so only text where both signals are very high
+gets it, and send the rest to a person. Writers who are plain, formal or
+writing in a second language pay for the accusations if I don't, and whoever
+relies on this for AI-free work pays if I do, but the first group is hurt
+directly and can't easily prove they wrote it, while the second just has to
+check more things by hand.
 
 
 <!-- ═════════════════════════════════════════════════════════════════════
