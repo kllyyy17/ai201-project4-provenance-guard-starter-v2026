@@ -301,7 +301,7 @@ The original decision keeps `"status": "decided"`. The appeal is a second entry 
 - *What I asked for:* Help running my own five criteria and the 56-attack set, and a diagnosis of each miss and each broken attack.
 - *What came back:* Run scripts and result tables, a first reading that grouped the misses under signal two, and a suggested single change (the weights).
 - *What I changed:* I marked criterion 5 MISSED, not "met on status", because the target names the code `invalid_input`. I wrote my own verdict rule for the attacks, and I reduced EV08 to "weakest call". I corrected an AI-written note in the criterion 3 diagnosis that called 0.518 the lowest score (it is the lowest model score). I wrote my prediction before the after run, and reported that the change helped only a little and fixed no criterion. I also reported the attacks it made worse (EV04, EV05).
-- *What I did not do:* I did not isolate which style sub-measure drives criterion 1, so the attack diagnoses for EV02, EV03, EV06 and EV07 come from the signal's design and the labels, and the README says so.
+- *What I did not do at first:* I did not isolate which style sub-measure drives each attack. I did that afterwards by running the attacks through the three sub-measures (see the diagnosis table), and the numbers, not the signal's design, are the basis for those diagnoses. I did the same for criterion 1 on my own ten pieces: spread drives it, with a constant punctuation floor (see Diagnoses).
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
@@ -772,10 +772,18 @@ criterion 1:
   groups by 0.046, so it adds almost nothing beyond the model signal. It cannot
   read, and short plain human writing looks like AI to it: even, mid-length
   sentences and a narrow vocabulary. Of my 10 pieces, 7 scored 0.58 or higher on
-  style (0.83, 0.72, 0.73, 0.73, 0.82, 0.83, 0.59). I have not yet separated
-  which of the three sub-measures (sentence spread, type-token ratio,
-  punctuation) pushes them up. That is the next thing to test, so I am not
-  claiming one.
+  style (0.83, 0.72, 0.73, 0.73, 0.82, 0.83, 0.59). I then ran the 10 pieces
+  through the three sub-measures (means, ramped 0 to 1 with 1 = AI-like):
+  spread 0.72, TTR 0.21, punctuation 0.94, style 0.648. Punctuation is
+  0.77 to 1.00 on every piece (raw 0.016 to 0.095 marks per word, so ordinary
+  writing sits below the 0.05 end of its ramp). It adds a near-constant 0.23 and
+  does not separate anything. TTR adds about 0.05. **Spread is what varies**, and
+  it decides the style score: the six pieces with style 0.71 or higher
+  (pieces 1, 2, 3, 4, 7, 9) have raw spread of 0.14 to 0.37, which ramps to
+  0.78 to 1.00, and the four lowest-style pieces (5, 6, 8, 10) have raw spread of
+  0.41 to 0.74. So signal two scores my own writing as AI because I write in
+  even-length sentences, and a constant punctuation floor keeps even the
+  uneven pieces at 0.30 or more.
 - **Stage and mechanism, miss 2 (combining rule).** `scoring.py::combine_signals`
   weights the two signals 0.5 and 0.5. That gives the weak signal half of the
   vote, so the 0.207 gap in the model signal is cut to 0.111 in the combined
@@ -828,12 +836,52 @@ They are four problems, not 24.
   anything. In the other direction, formal, careful, templated or repetitive
   human writing (FP02–FP07) is predictable, so signal one says AI with 0.80+
   and style agrees, so the combining rule has nothing to catch.
-- **Signal two reads shape, and shape is cheap to change (EV02, EV03, EV06,
-  EV07).** `stylometry.py::style_signal` measures sentence-length spread, word
-  variety and punctuation. Broken-up sentences, a pasted quotation, one long
-  plus one short sentence, and padded punctuation each move those numbers
-  without changing who wrote the text. I read these from the labels and the
-  signal's design; I did not isolate the sub-measure for each one.
+- **Signal two reads shape, and shape is cheap to change (EV02, EV03, EV05,
+  EV06, EV07).** I ran each input through the three sub-measures in
+  `stylometry.py` (ramped 0 to 1, 1 = AI-like; style weights 0.5 / 0.25 / 0.25
+  for spread / type-token ratio / punctuation). An unedited AI text (EV04) sits
+  at spread 1.00, TTR 0.00, punctuation 1.00, style 0.75. Each evasion moves one
+  sub-measure:
+
+  | ID | spread | TTR | punct | style | model | Which sub-measure did it |
+  |---|---|---|---|---|---|---|
+  | EV02 | 0.00 | 0.09 | 1.00 | 0.272 | 0.594 | Broken-up sentences gave raw spread 0.849, past the 0.80 human end, so the 0.5-weight measure fell from 1.00 to 0.00 |
+  | EV03 | 0.65 | 0.00 | 0.92 | 0.554 | 0.666 | The quotation's sentence lengths lifted raw spread to 0.443 (an unedited AI text is at or below 0.25) |
+  | EV05 | 0.23 | 0.27 | 0.95 | 0.418 | 0.321 | Spread (raw 0.675) again; model score also low (0.32) |
+  | EV06 | 0.00 | 0.33 | 1.00 | 0.333 | 0.573 | One long plus one short sentence gave raw spread 1.186, so spread went to 0.00 |
+  | EV07 | 1.00 | 0.26 | 0.17 | 0.500 | 0.586 | Punctuation padding raised density to 0.216 per word, so the punctuation measure fell from 1.00 to 0.17 |
+
+  In EV02, EV03 and EV06 the model signal was only 0.57 to 0.67 to begin with,
+  so the style drop alone was enough to pull the average under 0.65. The
+  mechanism is the same each time: sentence-length spread carries half of
+  `style_signal` and is the easiest number to change without changing who wrote
+  the text. EV07 is the punctuation measure, not spread. TTR was not the lever:
+  it is already 0.00 on ordinary AI text, because a 100-word window rarely
+  repeats words, so it adds almost nothing to either side. One finding applies
+  to every row: the punctuation measure is 0.92 to 1.00 for all of them,
+  including human text (FP01 is 1.00), because ordinary prose sits below the 0.05
+  AI end of its ramp. It adds a near-constant 0.25 to `style_score`, which is
+  part of why the style signal sits high for human text too (misses 1 to 3).
+- **Evasion that works on signal one, not signal two (EV01).** EV01 kept style
+  at 0.75, so typos did not fool the style signal. The typos made words
+  surprising to GPT-2 and dropped the model score to 0.164 (AI text normally
+  0.6 to 0.9). That is a signal one failure, and the average of 0.457 landed in
+  `unsure`.
+- **Human lead-in on AI text (EV09).** Model score 0.704 and style 0.552. The
+  human opening paragraph lengthened and varied the sentences, so spread ramped
+  to 0.60 (from 1.00) and style fell 0.75 to 0.55. At 0.5 / 0.5 the average
+  was 0.628, 0.022 under the `ai` line. Spread again, and the equal weighting
+  let the weaker signal pull it under.
+- **Plain human text just over the line (FP01).** Model 0.618, style 0.686, mean
+  0.652 against a threshold of 0.65, so it is `ai` by 0.002. The style score is
+  high because punctuation is 1.00 (0.019 marks per word, sparse) and spread is
+  0.62. This is the plain-writing blind spot of both signals, on the borderline.
+  The reweight moved it to 0.631 (`unsure`) because it put more weight on the
+  lower signal.
+- **Injection helping a human (PI06).** Same text as FP01. The injected line
+  cut the model score from 0.618 to 0.558 and the label from `ai` to `unsure`.
+  Signal one reads attacker-controlled text, which is the PI02 and PI03
+  mechanism below, here working in the writer's favour.
 - **The model signal reads the submission, and the submission is
   attacker-controlled (PI02, PI03).** A fake SYSTEM line (PI02) cut the model
   score from 0.754 to 0.204; a "note to the reviewing system" (PI03) moved
@@ -848,9 +896,6 @@ They are four problems, not 24.
   (model 0.998 vs style 0.5), so the clamp did its job but they still got a
   verdict where they should get a 400. MF08 has no length cap, so 60,000
   characters is accepted and scored on its first 400 tokens only.
-
-After the reweight, EV04 (unusual words) broke because style was the only
-thing catching it, and the label change is the cost of trusting signal one more.
 
 
 
@@ -925,6 +970,8 @@ signal scores** under the new weights, not re-run live (PI02 control 0.64
 `unsure`, PI03 control 0.743 `ai`, PI06 control 0.632 `unsure`). PI02 and PI03
 still change the label against their controls.
 
+**EV04, in the diagnosis terms:** EV04 (model 0.611, style 0.750) was `ai` at 0.681 under equal weights and is `unsure` at 0.639 under 0.8 / 0.2, because the style signal was the only thing holding it over 0.65.
+
 **Did it help, and how do I know:** A little, and it fixed no criterion.
 Attacks that broke fell from 24 to 22 (three gained, one lost), the criterion 2
 gap rose from 0.111 to 0.197 (target 0.25), and criterion 1 went from 4 to 3
@@ -961,7 +1008,7 @@ below is unfixed because I stopped at one change, not because it can't be fixed.
 | MF03–MF08 (junk input gets a verdict) | Reject text that is mostly non-letters or has too few real words, and cap length (for example 20,000 characters). Return 400 with a clear code. | Easy and safe, and the most obvious fix still open. I chose the weights because they touched the criteria, and this one touches none. I'd do this second. |
 | PI02, PI03 (injected instruction moves the label) | Strip or flag lines that address a "system" or "reviewer" before scoring, and log that it happened. Better: score paragraph by paragraph so one line can't move the whole result. | Stripping is guessable by an attacker, and paragraph scoring is a redesign. |
 | EV01, EV08 (typos, very short text) | Normalise typos before scoring, and return "too short to judge" under a minimum length, not a guess. | Typo correction changes the text we score, and I haven't tested what it does to honest writers. |
-| EV02, EV03, EV06, EV07 (shape tricks) | Make the style signal harder to move: use medians, ignore quoted text, cap punctuation credit. | Needs the sub-measure test from criterion 1 first. Without it I'd be guessing. |
+| EV02, EV03, EV06, EV07 (shape tricks) | Make the style signal harder to move: use medians, ignore quoted text, cap punctuation credit. | I have now measured the sub-measures for these attacks: spread (EV02, EV03, EV05, EV06) and punctuation (EV07). I'd flatten the spread ramp or cap it, and test it on my own writing first, since spread also carries criterion 1. |
 | EV04, EV05 (reweight side effects) | Nothing yet. These are the price of weight 0.8 on a signal that can be fooled. | I accept them for now (see the trade below). |
 | FP02–FP07 (human text accused) | I don't think this is fixable with these two signals. Formal, plain and non-native writing is predictable, and predictability is what signal one measures. The honest fix is to stop calling it `ai` on these signals: raise `AI_THRESHOLD` or drop the `ai` label and keep only `unsure`. | This is a decision about the product, not a bug. FP03, the careful non-native writer, is the one I'd least want to explain, and it is the reason for the trade below. |
 
