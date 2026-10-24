@@ -338,7 +338,8 @@ in memory, so a restart resets every limit.
 ```
 
 10 of 15 were rate limited. Each rejection was written to the audit log with
-`event: "rejected"`, `reason: "rate_limited"` and the limit that was hit, so a
+`status: "rejected"`, `reason: "rate_limited"` and the limit that was hit (an
+example entry is pasted under Attack Run — Before), so a
 flood shows up in `GET /log` and not as a gap. Full output is in
 `results/flood_2026-10-11_2009.md`.
 
@@ -437,10 +438,24 @@ log-injection attempt that stayed contained (PI05).
 {"timestamp": "2026-10-22T01:22:24+00:00", "content_id": "41a2fccc-9f92-42fe-b8cf-b3e8705b9d9c", "creator_id": "attacker_PI05", "guess": "unsure", "model_score": 0.6401, "style_score": 0.29872316291724393, "combined_score": 0.46941158145862194, "label": "We can't tell whether this was written by a person or by an AI tool. Our check looked at it and came out unsure, which happens with plenty of work that people wrote themselves. No one has decided anything about this piece.", "status": "decided"}
 ```
 
+Two rejected requests from a later flood (`python run_attacks.py --flood 15
+--creator flood_tester_2`, 5 × 200 then 10 × 429, output in
+`results/flood_2026-10-23_2112.md`). They carry the same nine fields as a
+decision, with the score fields `null` because nothing was scored, plus
+`event`, `reason` and `limit`:
+
+```json
+{"timestamp": "2026-10-24T01:12:08+00:00", "content_id": null, "creator_id": "flood_tester_2", "guess": null, "model_score": null, "style_score": null, "combined_score": null, "label": null, "status": "rejected", "event": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
+{"timestamp": "2026-10-24T01:12:08+00:00", "content_id": null, "creator_id": "flood_tester_2", "guess": null, "model_score": null, "style_score": null, "combined_score": null, "label": null, "status": "rejected", "event": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
+```
+
 Things the log shows: it records scores, label and status but not the
-submitted text, so a decision can't be re-checked from the log alone. Rejected
-requests (400 and 429) leave no entry, so the RQ10 and RQ11 rejections are
-invisible in it. The log's `combined_score` and the response's `confidence`
+submitted text, so a decision can't be re-checked from the log alone. Rate-limit
+rejections (429) are logged as `rejected` entries, with the nine fields. Input
+rejections (400) are not logged, and the limiter runs before validation, so
+the RQ10 and RQ11 attacks came back 429 and were logged as rate-limited, not as
+the malformed requests they were. Rejection entries written before this change
+(including the first flood, 2026-10-11) lack the nine-field shape. The log's `combined_score` and the response's `confidence`
 differ for "unsure" results (PI05: 0.469 logged, 0.531 returned).
 
 **The single worst outcome** — the one I'd least want to explain to a writer
