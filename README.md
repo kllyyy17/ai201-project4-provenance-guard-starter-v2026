@@ -642,7 +642,8 @@ first five are the AI pieces.
 ```
 
 **Criterion 3.** No piece returned `human`. The piece with the lowest model
-score of the 15 (0.319), a human-written one, is the closest it got (`run_eval.py::main`, trial 1):
+score of the 15 (0.319), a human-written one, is the closest it got
+(`run_eval.py::main`, trial 1):
 
 ```json
 {
@@ -816,8 +817,6 @@ criterion 1:
   mapping is not broken. The human mean combined score (0.658) sits on the 0.65
   `AI_THRESHOLD`, and the human cutoff is out of reach for the same reason:
   signal two reads human text as AI-ish, so scores bunch between 0.38 and 0.9.
-  (This also corrects the Criterion 3 note above, which calls 0.518 the lowest
-  score. 0.518 is the lowest model score, not the lowest combined score.)
 - **Stage and mechanism, miss 5 (the route).** `app.py::submit` rejects empty text
   correctly but returns `"error": "bad_request"`. This is a naming mismatch, not
   a logic fault. The fix is the string, in the route.
@@ -919,6 +918,12 @@ alone. The signal scores are identical before and after (GPT-2 is deterministic,
 e.g. EV01 is model 0.1635, style 0.75 in both runs), so every difference below
 comes from the weights.
 
+One separate edit was made after the runs: `audit.py` and `app.py` now log
+rejected requests (429 and 400) with the nine-field shape. That changes logging
+only. No score, label or response changed, so the before and after comparison
+is unaffected, and it is not the improvement. "One change" in this README means
+one change to the detector's behaviour.
+
 **Which diagnosis pointed at it:** Miss 2, combining rule. Style separates AI
 from human by 0.046 and the model signal by 0.207, but a flat 0.5/0.5 average
 gave the weak signal half the vote and cut the combined gap to 0.111.
@@ -979,7 +984,9 @@ signal scores** under the new weights, not re-run live (PI02 control 0.64
 `unsure`, PI03 control 0.743 `ai`, PI06 control 0.632 `unsure`). PI02 and PI03
 still change the label against their controls.
 
-**EV04, in the diagnosis terms:** EV04 (model 0.611, style 0.750) was `ai` at 0.681 under equal weights and is `unsure` at 0.639 under 0.8 / 0.2, because the style signal was the only thing holding it over 0.65.
+**EV04, in the diagnosis terms:** EV04 (model 0.611, style 0.750) was `ai` at
+0.681 under equal weights and is `unsure` at 0.639 under 0.8 / 0.2, because the
+style signal was the only thing holding it over 0.65.
 
 **Prediction against result.** I predicted a gap of about 0.175. The measured
 gap is 0.197. The prediction used the model-signal and style gaps from my own
